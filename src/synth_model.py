@@ -17,6 +17,7 @@ CCG    = float(sys.argv[13]) if len(sys.argv) > 13 else 0.0
 P2     = float(sys.argv[14]) if len(sys.argv) > 14 else 0.0
 PT     = float(sys.argv[15]) if len(sys.argv) > 15 else 0.0
 LISS   = float(sys.argv[16]) if len(sys.argv) > 16 else 1.0
+SPIN   = float(sys.argv[17]) if len(sys.argv) > 17 else 0.0
 
 CORE = open("sim_core.js", encoding="utf-8").read()
 
@@ -124,9 +125,22 @@ BOOT = r"""
     // LISS != 1 时 z 轴用不同频率 => 李萨如轨迹，落点扫过圆盘内部而不只是圆周，
     // 让 dropBelow 更容易水平命中塔顶的高点（那一项能给到 0.306 单位/帧）。
     const lr = M.params.liss || 1;
-    const a = 2*Math.PI*M.t/pNow;
-    const az = 2*Math.PI*M.t/(pNow*lr);
-    return { x: M.cbx + ox + R*Math.cos(a), z: M.cbz + oz + oz2 + R*Math.sin(az), tilt:[sx,sz] };
+    let xx, zz;
+    if (lr < 0) {
+      // 负值 = 正多边形：顶点数 |lr|，每 p 秒跳到下一个顶点。
+      // 目标点只落在 N 个固定位置，相位抖动不再累积 —— 用来压掉圆轨迹的混沌。
+      const N = Math.max(3, Math.round(-lr));
+      const k = Math.floor(M.t / pNow) % N;
+      // spin：多边形整体缓慢自转。顶点仍是 N 个离散位置（低混沌），
+      // 但塔柱的方位随时间改变，避免三柱各自长到顶后 dropBelow 挂不上去。
+      const av = 2*Math.PI*k/N + (M.params.spin || 0) * M.t;
+      xx = R*Math.cos(av); zz = R*Math.sin(av);
+    } else {
+      const a = 2*Math.PI*M.t/pNow;
+      const az = 2*Math.PI*M.t/(pNow*lr);
+      xx = R*Math.cos(a); zz = R*Math.sin(az);
+    }
+    return { x: M.cbx + ox + xx, z: M.cbz + oz + oz2 + zz, tilt:[sx,sz] };
   }
 
   M.start = () => {
@@ -256,7 +270,7 @@ with sync_playwright() as p:
     pg.goto("https://softserve.nog.cc/", wait_until="networkidle", timeout=60000)
     time.sleep(4)
     pg.bring_to_front()
-    params = {"R": R_U, "p": PER, "oz": OFFZ, "alpha": ALPHA, "maxShift": MAXS, "stopT": STOP, "riskStop": RISK, "stopCm": STOPCM, "slowRate": SLOW, "dGuard": DGUARD, "beta": BETA, "ccGain": CCG, "p2": P2, "pT": PT, "liss": LISS}
+    params = {"R": R_U, "p": PER, "oz": OFFZ, "alpha": ALPHA, "maxShift": MAXS, "stopT": STOP, "riskStop": RISK, "stopCm": STOPCM, "slowRate": SLOW, "dGuard": DGUARD, "beta": BETA, "ccGain": CCG, "p2": P2, "pT": PT, "liss": LISS, "spin": SPIN}
     info = pg.evaluate(BOOT, [CORE, params])
     L("boot", info, params)
     pg.evaluate("() => window.__m.start()")
