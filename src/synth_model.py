@@ -18,6 +18,9 @@ P2     = float(sys.argv[14]) if len(sys.argv) > 14 else 0.0
 PT     = float(sys.argv[15]) if len(sys.argv) > 15 else 0.0
 LISS   = float(sys.argv[16]) if len(sys.argv) > 16 else 1.0
 SPIN   = float(sys.argv[17]) if len(sys.argv) > 17 else 0.0
+CONE   = float(sys.argv[18]) if len(sys.argv) > 18 else 0.0
+PSMALL = float(sys.argv[19]) if len(sys.argv) > 19 else 0.06
+WRAPT  = float(sys.argv[20]) if len(sys.argv) > 20 else 0.0
 
 CORE = open("sim_core.js", encoding="utf-8").read()
 
@@ -102,6 +105,7 @@ BOOT = r"""
     const { R, p, oz, alpha, maxShift, beta } = M.params;
     let sx = 0, sz = 0;
     for (const j of M.model.joints) { sx += j.ax; sz += j.az; }
+    if (M.wrap) return { x: 0, z: 0, tilt: [sx, sz] };
     let ox = -alpha * sx, oz2 = -alpha * sz;
     // 阻尼项（D 控制）：alpha 只对倾角本身做 P 控制，塔一晃就靠它拉回来，
     // 没有对"正在以多快的速度倾"做反应，所以会振荡。beta 用倾角变化率。
@@ -126,7 +130,16 @@ BOOT = r"""
     // 让 dropBelow 更容易水平命中塔顶的高点（那一项能给到 0.306 单位/帧）。
     const lr = M.params.liss || 1;
     let xx, zz;
-    if (lr < 0) {
+    if (M.params.cone > 0) {
+      // 本轮（epitrochoid）：慢速大圆把落点稳在离塔轴 R 处（> 0.45 触发线），
+      // 快速小圆只负责让指针持续运动 —— travel 缓冲的 0.22s 平滑会把小圆抹掉，
+      // 所以落点约等于大圆位置，而挤出事件仍然每帧发生。
+      const w1 = 2*Math.PI/pNow;
+      const w2 = 2*Math.PI/(M.params.psmall || 0.06);
+      const cn = M.params.cone;
+      xx = R*Math.cos(w1*M.t) + cn*Math.cos(w2*M.t);
+      zz = R*Math.sin(w1*M.t) + cn*Math.sin(w2*M.t);
+    } else if (lr < 0) {
       // 负值 = 正多边形：顶点数 |lr|，每 p 秒跳到下一个顶点。
       // 目标点只落在 N 个固定位置，相位抖动不再累积 —— 用来压掉圆轨迹的混沌。
       const N = Math.max(3, Math.round(-lr));
@@ -148,7 +161,7 @@ BOOT = r"""
     M.released = false; M.relT = 0; M.settleLog = [];
     M.hiPage = -1; M.hiAt = 0; M.hf = 0; M.hEl = document.querySelector('#height');
     M.hist = []; M.lastPage = NaN; M.growth = NaN; M.log = []; M.lastSnap = 0; M.pt = null; M.dts = [];
-    M.cbx = 0; M.cbz = 0;
+    M.cbx = 0; M.cbz = 0; M.wrap = false; M.wrapAt = 0;
     fire('pointerdown', CX, CY);
     const frame = (ts) => {
       if (!M.running) return;
@@ -231,6 +244,20 @@ BOOT = r"""
       const split = (M.params.dGuard > 0) && (M.t > 20) && (pc === pc) &&
                     (Math.abs(pc - M.model.height * 5) > M.params.dGuard);
 
+      // 收尾（wrap）：松手瞬间若空中仍有 pending，finish 会把它们一次堆成
+      // 收尾锥压在塔顶 —— 塔已饱和时这一下往往直接压垮。先把指针收回中心
+      // 让 pending 落完（travelSeconds = 0.22s），再松手，finish 就不会启动。
+      if (stalled && M.params.wrapT > 0 && !M.wrap) { M.wrap = true; M.wrapAt = M.t; }
+      const wrapping = M.wrap && (M.t - M.wrapAt < M.params.wrapT);
+      if (M.wrap && !wrapping && !M.released) {
+        M.why = 'stall';
+        M.stop();
+        M.timer = requestAnimationFrame(frame);
+        return;
+      }
+
+      if (wrapping) { M.timer = requestAnimationFrame(frame); return; }
+
       if (M.t >= M.params.stopT || pc >= M.params.stopCm || stalled || slow || split ||
           M.model.risk >= M.params.riskStop || M.model.failureReason) {
         M.why = M.model.failureReason ? 'modelfail' : stalled ? 'stall' : slow ? 'slow' : split ? 'split'
@@ -270,7 +297,7 @@ with sync_playwright() as p:
     pg.goto("https://softserve.nog.cc/", wait_until="networkidle", timeout=60000)
     time.sleep(4)
     pg.bring_to_front()
-    params = {"R": R_U, "p": PER, "oz": OFFZ, "alpha": ALPHA, "maxShift": MAXS, "stopT": STOP, "riskStop": RISK, "stopCm": STOPCM, "slowRate": SLOW, "dGuard": DGUARD, "beta": BETA, "ccGain": CCG, "p2": P2, "pT": PT, "liss": LISS, "spin": SPIN}
+    params = {"R": R_U, "p": PER, "oz": OFFZ, "alpha": ALPHA, "maxShift": MAXS, "stopT": STOP, "riskStop": RISK, "stopCm": STOPCM, "slowRate": SLOW, "dGuard": DGUARD, "beta": BETA, "ccGain": CCG, "p2": P2, "pT": PT, "liss": LISS, "spin": SPIN, "cone": CONE, "psmall": PSMALL, "wrapT": WRAPT}
     info = pg.evaluate(BOOT, [CORE, params])
     L("boot", info, params)
     pg.evaluate("() => window.__m.start()")
