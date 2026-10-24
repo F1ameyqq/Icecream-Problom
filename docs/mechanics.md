@@ -7,7 +7,7 @@
 | 概念 | 内部单位 | 显示 |
 |---|---|---|
 | 长度 | 1 | 5 cm |
-| 奶油直径 `creamDiameter` | 0.36 | 1.8 cm |
+| 冰淇淋直径 `creamDiameter` | 0.36 | 1.8 cm |
 | 单层高度增量 `a` | 0.153 | 0.765 cm |
 | band 高度 `bandHeight` | 0.72 | 3.6 cm |
 | 底盘半径 `od` | 0.5 | 2.5 cm |
@@ -28,7 +28,7 @@ height = max(height, 落点y + a × radiusScale)
 
 ## 2. 一个落点的三种命运
 
-奶油在指针位置挤出，延迟 `travelSeconds = 0.22` 秒后落地。落地位置为：
+冰淇淋在指针位置挤出，延迟 `travelSeconds = 0.22` 秒后落地。落地位置为：
 
 ```
 落点 = 0.6 × 挤出时的指针位置 + 0.4 × 当前指针位置
@@ -122,12 +122,12 @@ supportHeight(x, z, 基础高度, 过滤条件) =
 松手（`pointerup`）后进入结算等待：
 
 ```
-settling = !pouring && (还在空中的奶油数量 > 0 || (未失败 && 塔未静止))
+settling = !pouring && (还在空中的冰淇淋数量 > 0 || (未失败 && 塔未静止))
 ```
 
 两个条件都要清空：
 
-1. **空中奶油落完**——`pending` 队列，最多再等 0.22 秒
+1. **空中冰淇淋落完**——`pending` 队列，最多再等 0.22 秒
 2. **塔完全静止**——`resting = 最大角速度 < restSpeed(0.03)`
 
 随后：
@@ -137,7 +137,7 @@ settling = !pouring && (还在空中的奶油数量 > 0 || (未失败 && 塔未�
 
 ### 松手后的额外收益
 
-松手瞬间若空中仍有奶油、且能接住，会进入 `finish` 分支：
+松手瞬间若空中仍有冰淇淋、且能接住，会进入 `finish` 分支：
 
 ```
 高度 = 上一落点y + creamDiameter/2 × 1.25 × smoothstep(t)
@@ -151,7 +151,7 @@ settling = !pouring && (还在空中的奶油数量 > 0 || (未失败 && 塔未�
 | 常量 | 值 | 作用 |
 |---|---|---|
 | `fixedDt` | 1/60 | 物理步长 |
-| `creamDiameter` | 0.36 | 奶油直径 |
+| `creamDiameter` | 0.36 | 冰淇淋直径 |
 | `flattening` | 0.85 | 高度系数 |
 | `extrusionLengthPerSecond` | 0.74 | 挤出长度率 |
 | `neighboringStroke` | 0.72 | 支撑隔离阈值 |

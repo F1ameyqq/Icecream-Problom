@@ -1,6 +1,6 @@
 # Icecream Problem — 逆向分析与自动化记录
 
-对 [softserve.nog.cc](https://softserve.nog.cc/) 这款「挤奶油堆高」小游戏的逆向分析记录：
+对 [softserve.nog.cc](https://softserve.nog.cc/) 这款「挤冰淇淋堆高」小游戏的逆向分析记录：
 从读懂它的物理判定开始，到用自动化程序把成绩从 **48cm 推到 213.7cm**。
 
 > 个人娱乐用途的研究记录。仓库不包含游戏任何原始代码。
